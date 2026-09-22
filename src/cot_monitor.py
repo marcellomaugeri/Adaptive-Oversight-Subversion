@@ -15,14 +15,14 @@ from typing import Literal
 
 from inspect_ai.agent import AgentState
 from inspect_ai.log import transcript
-from inspect_ai.model import CachePolicy, ChatMessage, ChatMessageAssistant, Model, ModelOutput, get_model
+from inspect_ai.model import CachePolicy, ChatMessage, ChatMessageAssistant, ChatMessageSystem, ChatMessageUser, Model, ModelOutput, get_model
 from inspect_ai.tool import Tool, ToolCall, ToolDef, ToolParams
 from inspect_ai.util import store
 from inspect_petri.target import TOOL_RESULT, ExitSignal, TargetContext, controller
 from inspect_scout import AnswerStructured, MessagesPreprocessor, generate_answer, messages_as_str
 from pydantic import BaseModel, Field
 
-from .prompts import MONITOR_PROMPT
+from .prompts.monitor import MONITOR_PROMPT_TEMPLATE, MONITOR_SYSTEM_PROMPT
 
 # what the target reads in place of the result of a blocked tool call
 BLOCKED_ERROR = "Call blocked"
@@ -52,7 +52,7 @@ async def monitor(messages: list[ChatMessage]) -> MonitorOutput | None:
     trajectory = await messages_as_str(messages, preprocessor=preprocessor, format="json")
     # Scout's structured answer, as in Petri's judge: a missing or invalid answer is asked again, up to 3 attempts
     result = await generate_answer(
-        MONITOR_PROMPT.format(trajectory=trajectory),
+        [ChatMessageSystem(content=MONITOR_SYSTEM_PROMPT), ChatMessageUser(content=MONITOR_PROMPT_TEMPLATE.format(trajectory=trajectory))],
         AnswerStructured(type=MonitorOutput),
         model=get_model(role="monitor", required=True),
     )
