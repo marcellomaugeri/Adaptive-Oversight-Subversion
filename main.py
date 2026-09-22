@@ -13,8 +13,9 @@ def monitored_audit(
     max_turns: int = 30,
     threshold: float | None = None,
     disclosure: Disclosure = "nothing",
+    target_compaction: int | float = 0.9,
 ) -> Task:
-    """Petri's audit with rollback disabled and the monitor. With `threshold=None` the monitor rates every step and never blocks."""
+    """Petri's audit with rollback disabled and the monitor. With `threshold=None` the monitor rates every step and never blocks. The target compacts its input at `target_compaction`: a fraction of its context window up to 1.0, otherwise a token count."""
     tools = []
     for tool in auditor_tools(rollback=False):
         if ToolDef(tool).name == "resume":
@@ -25,7 +26,7 @@ def monitored_audit(
         dataset=seeds_dataset(seed_instructions),
         solver=audit_solver(
             auditor=auditor_agent(max_turns=max_turns, tools=tools, generate=generate_hook),
-            target=TargetWithSystemMessages(),
+            target=TargetWithSystemMessages(target_compaction),
         ),
         scorer=audit_judge(),
         viewer=audit_viewer(),
