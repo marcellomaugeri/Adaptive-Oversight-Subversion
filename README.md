@@ -52,7 +52,7 @@ uv run inspect eval inspect_petri/audit -T seed_instructions=id:clinical_oversig
 ### Run one scenario with the monitor
 
 ```bash
-uv run inspect eval src/cot_monitor.py@monitored_audit -T seed_instructions=id:clinical_oversight_subversion -T max_turns=30 -T threshold=0.5 -T disclosure=nothing
+uv run inspect eval main.py@monitored_audit -T seed_instructions=id:clinical_oversight_subversion -T max_turns=30 -T threshold=0.5 -T disclosure=nothing
 ```
 
 `disclosure=suspiciousness` sends the score to the target as a system message after each step. Run it only with OpenAI targets, or Claude 4.8+ on the Claude API or on Claude Platform on AWS: these deliver the message in place. Other providers do not. For older Claude models and for Claude on Bedrock or Vertex, Inspect moves the score into the system prompt when it follows a tool result and rewrites it as a user message when it follows a user message. For Gemini, Inspect moves every system message into the system instruction. In both cases the target does not read one score after each step.
