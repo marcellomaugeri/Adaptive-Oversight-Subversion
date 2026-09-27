@@ -10,6 +10,7 @@ from inspect_petri import audit_solver, audit_viewer, auditor_agent, auditor_too
 from src.cot_monitor import Disclosure, generate_hook, monitored_resume
 from src.judge.step_judge import step_judge
 from src.prompts.auditor import AUDITOR_SYSTEM_PROMPT, AUDITOR_USER_PROMPT
+from src.seed_builder.builder import build_seeds
 from src.target.monitored_target import MonitoredTarget
 
 
@@ -68,7 +69,5 @@ if __name__ == "__main__":
     arguments = parser.parse_args()
     if not arguments.build:
         parser.error("use --build to generate seeds")
-    from src.seed_builder.builder import build_seeds
-
     for generated_seed in build_seeds():
         print(generated_seed)
