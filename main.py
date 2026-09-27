@@ -1,5 +1,7 @@
 """Entry point: the monitored audit task, Petri's audit with the CoT monitor wired in."""
 
+from argparse import ArgumentParser
+
 from inspect_ai import Task, task
 from inspect_ai.log import transcript
 from inspect_ai.tool import Tool, ToolDef
@@ -54,3 +56,15 @@ def monitored_audit(
         scorer=audit_judge(),
         viewer=audit_viewer(),
     )
+
+
+if __name__ == "__main__":
+    parser = ArgumentParser(description="Build the runnable seeds for Petri.")
+    parser.add_argument("--build", action="store_true", help="write generated Markdown seeds into seeds/")
+    arguments = parser.parse_args()
+    if not arguments.build:
+        parser.error("use --build to generate seeds")
+    from src.seed_builder.builder import build_seeds
+
+    for generated_seed in build_seeds():
+        print(generated_seed)
