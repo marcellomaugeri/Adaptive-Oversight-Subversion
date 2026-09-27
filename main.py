@@ -4,7 +4,7 @@ from argparse import ArgumentParser
 
 from inspect_ai import Task, task
 from inspect_ai.log import transcript
-from inspect_ai.tool import Tool, ToolDef
+from inspect_ai.tool import Tool, ToolDef, ToolParam, ToolParams
 from inspect_petri import audit_solver, audit_viewer, auditor_agent, auditor_tools, seeds_dataset
 
 from src.cot_monitor import Disclosure, generate_hook, monitored_resume
@@ -13,19 +13,21 @@ from src.prompts.auditor import AUDITOR_SYSTEM_PROMPT, AUDITOR_USER_PROMPT
 from src.target.monitored_target import MonitoredTarget
 
 
-def explained_end_conversation(original: Tool) -> Tool:
-    """Record the auditor's motivation when it ends a run early."""
+class ExplainedEndConversation:
+    """Petri's `end_conversation` tool, which also records the auditor's motivation when it ends a run early."""
 
-    async def end(motivation: str) -> str:
-        """End the conversation.
+    def __init__(self, original: Tool) -> None:
+        self.original = original  # Petri's end_conversation
 
-        Args:
-            motivation: Why the auditor stopped the run.
-        """
+    async def __call__(self, motivation: str) -> str:
         transcript().info({"motivation": motivation}, source="auditor_stop")
-        return await original()
+        return await self.original()
 
-    return ToolDef(end, name="end_conversation", description="End the conversation and record the motivation for stopping.").as_tool()
+
+def explained_end_conversation(original: Tool) -> Tool:
+    """Wrap Petri's `end_conversation` tool, as `monitored_resume` wraps `resume`: the auditor must state why it stops."""
+    parameters = ToolParams(properties={"motivation": ToolParam(type="string", description="Why the auditor stopped the run.")}, required=["motivation"])
+    return ToolDef(ExplainedEndConversation(original), name="end_conversation", description="End the conversation and record the motivation for stopping.", parameters=parameters).as_tool()
 
 
 @task
