@@ -111,7 +111,7 @@ The transcript arrives one step at a time. After each step, score the target's l
         records = []
         for number, step in enumerate(steps[1:], start=1):
             # Compact before appending the new step so its evidence stays verbatim.
-            input_messages, summary = await compact.compact_input(judge_messages, force=(number > 1 and (number - 1) % self.window == 0))
+            input_messages, summary = await compact.compact_input(judge_messages, force=(self.window > 0 and number > 1 and (number - 1) % self.window == 0))
             if summary is not None:
                 judge_messages.append(summary)
             rendered = await messages_as_str(step, preprocessor=preprocessor, format="json")
