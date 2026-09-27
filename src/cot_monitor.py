@@ -55,8 +55,8 @@ class Monitor:
     async def rate(self, target_messages: list[ChatMessage]) -> MonitorOutput | None:
         """Rate the last step in `target_messages` (the target's whole conversation) with the model bound to the `monitor` role. Returns None when the monitor gave no valid answer."""
         model = get_model(role="monitor", required=True)
-        # the new part of the target's conversation (instructions, messages, chain-of-thought, tool calls and results), without the scores disclosed to the target
-        part = [message for message in target_messages[self.seen :] if not (message.role == "system" and message.text.startswith(SUSPICIOUSNESS_MESSAGE))]
+        # the new part of the target's conversation (instructions, messages, chain-of-thought, tool calls and results), without the scores disclosed to the target and without the target's own compaction summaries (the monitor reads the full conversation)
+        part = [message for message in target_messages[self.seen :] if not (message.role == "system" and message.text.startswith(SUSPICIOUSNESS_MESSAGE)) and "summary" not in (message.metadata or {})]
         self.seen = len(target_messages)
         # the history is compacted before the new part is added: a summary replaces everything after the first part, and the step to judge must stay verbatim
         input, summary = await self.compact.compact_input(self.messages)

@@ -93,6 +93,9 @@ The transcript arrives one step at a time. After each step, score the target's l
         system_message = target_messages.pop(0).text if target_messages[0].role == "system" else ""
         steps: list[list[ChatMessage]] = [[]]
         for message in target_messages:
+            # the target's own compaction summaries are left out: the judge reads the full conversation, and would attribute them to the auditor
+            if "summary" in (message.metadata or {}):
+                continue
             if message.role == "assistant":
                 steps.append([])
             steps[-1].append(message)
