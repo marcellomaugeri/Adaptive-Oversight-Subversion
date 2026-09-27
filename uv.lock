@@ -14,19 +14,24 @@ source = { virtual = "." }
 dependencies = [
     { name = "anthropic" },
     { name = "inspect-petri" },
-    { name = "inspect-typesafe" },
     { name = "openai" },
     { name = "petri-dish" },
+]
+
+[package.optional-dependencies]
+jev = [
+    { name = "inspect-typesafe" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "anthropic", specifier = ">=1.7.0" },
     { name = "inspect-petri", specifier = ">=3.1.0" },
-    { name = "inspect-typesafe", git = "https://github.com/jasongwartz/inspect-typesafe?rev=bfbb0dd0dd7d543e5b1826d809835462fd666ab4" },
+    { name = "inspect-typesafe", marker = "extra == 'jev'", git = "https://github.com/jasongwartz/inspect-typesafe?rev=bfbb0dd0dd7d543e5b1826d809835462fd666ab4" },
     { name = "openai", specifier = ">=3.16.2" },
     { name = "petri-dish", specifier = ">=0.3.4" },
 ]
+provides-extras = ["jev"]
 
 [[package]]
 name = "agent-client-protocol"
