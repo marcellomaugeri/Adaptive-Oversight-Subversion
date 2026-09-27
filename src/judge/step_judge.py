@@ -27,6 +27,15 @@ class StepJudge:
     """Score each target step with one structured LLM answer and compact the judge chat."""
 
     def __init__(self, dimensions: list[JudgeDimension], model: str | Model | None, audit_name: str | None, instructions: str | None, cache: bool | CachePolicy, window: int, info_indicators: Sequence[str]) -> None:
+        # validate dimension names, as Petri's judge does (inspect_petri/_judge/judge.py, _alignment_answer_type)
+        names = [d.name for d in dimensions]
+        duplicates = {n for n in names if names.count(n) > 1}
+        if duplicates:
+            raise ValueError(f"Duplicate dimension names: {duplicates}")
+        reserved = {"highlights", "summary", "justification"} & set(names)
+        if reserved:
+            raise ValueError(f"Dimension names collide with reserved fields: {reserved}")
+
         self.dimensions = dimensions
         self.model = model
         self.audit_name = audit_name
