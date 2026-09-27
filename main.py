@@ -7,8 +7,9 @@ from inspect_ai.log import transcript
 from inspect_ai.tool import Tool, ToolDef
 from inspect_petri import audit_judge, audit_solver, audit_viewer, auditor_agent, auditor_tools, seeds_dataset
 
-from src.cot_monitor import Disclosure, TargetWithSystemMessages, generate_hook, monitored_resume
+from src.cot_monitor import Disclosure, generate_hook, monitored_resume
 from src.prompts.auditor import AUDITOR_SYSTEM_PROMPT, AUDITOR_USER_PROMPT
+from src.target.monitored_target import MonitoredTarget
 
 
 def explained_end_conversation(original: Tool) -> Tool:
@@ -52,7 +53,7 @@ def monitored_audit(
 
     return Task(
         dataset=seeds_dataset(seed_instructions),
-        solver=audit_solver(auditor=auditor, target=TargetWithSystemMessages(target_compaction)),
+        solver=audit_solver(auditor=auditor, target=MonitoredTarget(target_compaction)),
         scorer=audit_judge(),
         viewer=audit_viewer(),
     )
