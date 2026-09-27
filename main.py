@@ -5,6 +5,7 @@ from inspect_ai.tool import ToolDef
 from inspect_petri import audit_judge, audit_solver, audit_viewer, auditor_agent, auditor_tools, seeds_dataset
 
 from src.cot_monitor import Disclosure, TargetWithSystemMessages, generate_hook, monitored_resume
+from src.prompts.auditor import AUDITOR_SYSTEM_PROMPT, AUDITOR_USER_PROMPT
 
 
 @task
@@ -22,12 +23,11 @@ def monitored_audit(
             tool = monitored_resume(tool, threshold, disclosure)
         tools.append(tool)
 
+    auditor = auditor_agent(max_turns=max_turns, tools=tools, generate=generate_hook, system_message=AUDITOR_SYSTEM_PROMPT, user_message=AUDITOR_USER_PROMPT)
+
     return Task(
         dataset=seeds_dataset(seed_instructions),
-        solver=audit_solver(
-            auditor=auditor_agent(max_turns=max_turns, tools=tools, generate=generate_hook),
-            target=TargetWithSystemMessages(target_compaction),
-        ),
+        solver=audit_solver(auditor=auditor, target=TargetWithSystemMessages(target_compaction)),
         scorer=audit_judge(),
         viewer=audit_viewer(),
     )
