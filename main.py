@@ -16,7 +16,11 @@ from src.target.monitored_target import MonitoredTarget
 
 
 class ExplainedEndConversation:
-    """Petri's `end_conversation` tool, which also records the auditor's motivation when it ends a run early."""
+    """Petri's `end_conversation` tool, which also records the auditor's motivation when it ends a run early.
+
+    Args:
+        motivation (str): Why the auditor stopped the run.
+    """
 
     def __init__(self, original: Tool) -> None:
         self.original = original  # Petri's end_conversation
