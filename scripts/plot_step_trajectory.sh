@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One run over its steps: the monitor's suspiciousness, a judge dimension, and the blocked steps in red, written as HTML next to the log.
+# One run over its steps: the monitor's suspiciousness, a judge dimension, and the blocked steps as dashed black lines, written as HTML next to the log.
 # Usage: scripts/plot_step_trajectory.sh [LOG] [DIMENSION]
 #   LOG        an .eval file (default: the most recent log in logs/)
 #   DIMENSION  a judge dimension (default: unsanctioned_behaviour)
