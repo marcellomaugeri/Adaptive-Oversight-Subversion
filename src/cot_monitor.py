@@ -15,7 +15,7 @@ from typing import Literal
 from weakref import WeakKeyDictionary
 
 from inspect_ai.log import transcript
-from inspect_ai.model import CachePolicy, ChatMessage, ChatMessageAssistant, ChatMessageSystem, ChatMessageTool, ChatMessageUser, CompactionSummary, Model, ModelOutput, compaction, get_model
+from inspect_ai.model import CachePolicy, ChatMessage, ChatMessageAssistant, ChatMessageSystem, ChatMessageTool, ChatMessageUser, CompactionSummary, ContentReasoning, Model, ModelOutput, compaction, get_model
 from inspect_ai.tool import Tool, ToolCall, ToolDef, ToolParams
 from inspect_ai.util import store
 from inspect_petri.target import controller
@@ -138,5 +138,7 @@ async def generate_hook(model: Model, messages: list[ChatMessage], tools: list[T
         store().delete(PENDING_TOOL_RESULTS)
         calls = [ToolCall(id=str(uuid.uuid4()), function="send_tool_call_result", arguments=result) for result in results]
         calls.append(ToolCall(id=str(uuid.uuid4()), function="resume", arguments={}))
-        return ModelOutput.from_message(ChatMessageAssistant(content="", tool_calls=calls, model=str(model)), stop_reason="tool_calls")
+        # DeepSeek's thinking mode rejects an assistant tool-call turn without reasoning_content; internal="reasoning_content" makes Inspect send it in that field
+        reasoning = ContentReasoning(reasoning="The monitor blocked the target's tool call: send its result and resume.", internal="reasoning_content")
+        return ModelOutput.from_message(ChatMessageAssistant(content=[reasoning], tool_calls=calls, model=str(model)), stop_reason="tool_calls")
     return await model.generate(input=messages, tools=tools, cache=cache)
