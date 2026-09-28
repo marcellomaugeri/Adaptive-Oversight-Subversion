@@ -18,12 +18,12 @@ series = run.melt(id_vars="step", value_vars=["suspiciousness", dimension], var_
 blocked_steps = run.loc[run["blocked"].eq(True), "step"].tolist()
 
 write_html(output, plot(
-    rule_x(x=blocked_steps, stroke="red"),
+    rule_x(x=blocked_steps, stroke="red", stroke_dasharray="4 3"),
     line(Data.from_dataframe(series), x="step", y="score", stroke="series"),
     x_label="Step",
     y_label="Score",
     y_domain=[0, 1],
     color_domain=["suspiciousness", dimension],
     color_range=["orange", "red"],
-    legend=legend("color", frame_anchor="top-left", inset=10),
+    legend=legend("color", frame_anchor="top-right", inset=10, background=False),
 ))
