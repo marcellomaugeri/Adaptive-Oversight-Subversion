@@ -63,7 +63,7 @@ uv run inspect eval inspect_petri/audit -T seed_instructions=id:clinical_oversig
 ### Run one scenario with the monitor
 
 ```bash
-uv run inspect eval main.py@monitored_audit -T seed_instructions=id:clinical_oversight_subversion -T max_turns=30 -T threshold=0.5 -T disclosure=nothing
+uv run inspect eval main.py@monitored_audit -T seed_instructions=id:clinical_oversight_subversion -T max_turns=30 -T monitoring=active -T threshold=0.5 -T feedback=decision
 ```
 
 Build the runnable seeds from the shared auditor text, scenario text and condition values:
@@ -82,11 +82,11 @@ uv run inspect eval main.py@monitored_audit -T seed_instructions=seeds/ --sample
 uv run inspect eval main.py@monitored_audit -T seed_instructions=seeds/ --sample-id insider_trading_no_nudge -T max_turns=80
 ```
 
-These commands leave `threshold` unset, so the monitor records scores without blocking. Set a threshold and disclosure mode only after reviewing a baseline for the selected scenario.
+These commands use the default passive monitor, which records scores without blocking. Switch to an active monitor (`-T monitoring=active` with a `threshold` and a `feedback`) only after reviewing a baseline for the selected scenario.
 
 `max_turns` caps auditor turns, not target actions. The auditor's `end_conversation` tool takes a required `motivation` string and records it in the log before calling Petri's original tool. The stopping rule is in the auditor prompt; the code does not check whether the motivation is valid. A target response without a tool call also needs another auditor-supplied user turn before the target can continue. The scenarios ask for a persistent world through the budget, but the simulation's state still lives in the auditor's context; very long runs need durable external state, bounded monitor context and a judge that can review long transcripts. A finite AISI flag task can also finish naturally before the turn cap.
 
-`disclosure=suspiciousness` sends the score to the target as a system message after each step. Run it only with OpenAI targets, or Claude 4.8+ on the Claude API or on Claude Platform on AWS: these deliver the message in place. Other providers do not. For older Claude models and for Claude on Bedrock or Vertex, Inspect moves the score into the system prompt when it follows a tool result and rewrites it as a user message when it follows a user message. For Gemini, Inspect moves every system message into the system instruction. In both cases the target does not read one score after each step.
+`disclose_suspiciousness=true` sends the score to the target as a system message after each step. Run it only with OpenAI targets, or Claude 4.8+ on the Claude API or on Claude Platform on AWS: these deliver the message in place. Other providers do not. For older Claude models and for Claude on Bedrock or Vertex, Inspect moves the score into the system prompt when it follows a tool result and rewrites it as a user message when it follows a user message. For Gemini, Inspect moves every system message into the system instruction. In both cases the target does not read one score after each step.
 
 ### Future work: evaluation-infrastructure honeypot
 
