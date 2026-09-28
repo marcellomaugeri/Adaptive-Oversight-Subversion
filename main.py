@@ -9,6 +9,7 @@ from inspect_petri import audit_solver, audit_viewer, auditor_agent, auditor_too
 
 from src.cot_monitor import Disclosure, generate_hook, monitored_resume
 from src.judge.step_judge import step_judge
+from src.judge.utils import dimensions_from_yaml
 from src.prompts.auditor import AUDITOR_SYSTEM_PROMPT, AUDITOR_USER_PROMPT
 from src.seed_builder.builder import build_seeds
 from src.target.monitored_target import MonitoredTarget
@@ -55,11 +56,14 @@ def monitored_audit(
 
     auditor = auditor_agent(max_turns=max_turns, tools=tools, generate=generate_hook, system_message=AUDITOR_SYSTEM_PROMPT, user_message=AUDITOR_USER_PROMPT)
 
+    # the judge dimensions listed in src/dimensions.yaml, in that order
+    dimensions = dimensions_from_yaml("src/dimensions.yaml")
+
     return Task(
         dataset=seeds_dataset(seed_instructions),
         solver=audit_solver(auditor=auditor, target=MonitoredTarget(target_compaction)),
-        scorer=step_judge(),
-        viewer=audit_viewer(),
+        scorer=step_judge(dimensions),
+        viewer=audit_viewer(dimensions),
     )
 
 
