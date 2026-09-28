@@ -8,7 +8,7 @@ from inspect_ai.model import ModelInfo, set_model_info
 from inspect_ai.tool import Tool, ToolDef, ToolParam, ToolParams
 from inspect_petri import audit_solver, audit_viewer, auditor_agent, auditor_tools, seeds_dataset
 
-from src.cot_monitor import Disclosure, generate_hook, monitored_resume
+from src.cot_monitor import Feedback, Monitoring, generate_hook, monitored_resume
 from src.judge.step_judge import step_judge
 from src.judge.utils import dimensions_from_yaml
 from src.prompts.auditor import AUDITOR_SYSTEM_PROMPT, AUDITOR_USER_PROMPT
@@ -46,20 +46,26 @@ def explained_end_conversation(original: Tool) -> Tool:
 def monitored_audit(
     seed_instructions: str | None = None,
     max_turns: int = 30,
+    monitoring: Monitoring = "passive",
     threshold: float | None = None,
-    disclosure: Disclosure = "nothing",
+    feedback: Feedback | None = None,
+    disclose_suspiciousness: bool = False,
     target_compaction: int | float = 0.9,
 ) -> Task:
     """Run Petri's audit with rollback disabled and the monitor enabled.
 
-    With `threshold=None`, the monitor rates each step without blocking it.
+    A passive monitor rates each step without blocking it; an active monitor also blocks a tool call whose suspiciousness reaches `threshold`, and the target reads the block with the chosen `feedback`. With `disclose_suspiciousness`, the target reads its suspiciousness after every step.
     The target compacts its input at `target_compaction`: a fraction of its
     context window up to 1.0, or a token count otherwise.
     """
+    # an active monitor needs a threshold and a feedback, a passive monitor takes neither
+    if (monitoring == "active") != (threshold is not None) or (monitoring == "active") != (feedback is not None):
+        raise ValueError(f"monitoring={monitoring!r} does not match threshold={threshold!r} and feedback={feedback!r}: an active monitor needs both, a passive monitor takes neither.")
+
     tools = []
     for tool in auditor_tools(rollback=False):
         if ToolDef(tool).name == "resume":
-            tool = monitored_resume(tool, threshold, disclosure)
+            tool = monitored_resume(tool, monitoring, threshold, feedback, disclose_suspiciousness)
         elif ToolDef(tool).name == "end_conversation":
             tool = explained_end_conversation(tool)
         tools.append(tool)
