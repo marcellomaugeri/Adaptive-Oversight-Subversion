@@ -50,35 +50,40 @@ def monitored_audit(
     threshold: float | None = None,
     feedback: Feedback | None = None,
     disclose_suspiciousness: bool = False,
-    target_compaction: int | float = 0.9,
+    compaction_threshold: dict[str, int | float] | None = None,
 ) -> Task:
     """Run Petri's audit with rollback disabled and the monitor enabled.
 
     A passive monitor rates each step without blocking it; an active monitor also blocks a tool call whose suspiciousness reaches `threshold`, and the target reads the block with the chosen `feedback`. With `disclose_suspiciousness`, the target reads its suspiciousness after every step.
-    The target compacts its input at `target_compaction`: a fraction of its
-    context window up to 1.0, or a token count otherwise.
+    Each role (auditor, target, monitor, judge) compacts its input at its `compaction_threshold`, e.g. `-T compaction_threshold="{target: 200000, monitor: 200000}"`: a fraction of the model's context window up to 1.0, otherwise a token count, as in Inspect's CompactionAuto. A role left out keeps Inspect's default of 0.9.
     """
     # an active monitor needs a threshold and a feedback, a passive monitor takes neither
     if (monitoring == "active") != (threshold is not None) or (monitoring == "active") != (feedback is not None):
         raise ValueError(f"monitoring={monitoring!r} does not match threshold={threshold!r} and feedback={feedback!r}: an active monitor needs both, a passive monitor takes neither.")
 
+    # the compaction thresholds are keyed by the model roles
+    compaction_threshold = compaction_threshold or {}
+    unknown = set(compaction_threshold) - {"auditor", "target", "monitor", "judge"}
+    if unknown:
+        raise ValueError(f"compaction_threshold has unknown roles {sorted(unknown)}: the roles are auditor, target, monitor and judge.")
+
     tools = []
     for tool in auditor_tools(rollback=False):
         if ToolDef(tool).name == "resume":
-            tool = monitored_resume(tool, monitoring, threshold, feedback, disclose_suspiciousness)
+            tool = monitored_resume(tool, monitoring, threshold, feedback, disclose_suspiciousness, compaction_threshold.get("monitor", 0.9))
         elif ToolDef(tool).name == "end_conversation":
             tool = explained_end_conversation(tool)
         tools.append(tool)
 
-    auditor = auditor_agent(max_turns=max_turns, tools=tools, generate=generate_hook, system_message=AUDITOR_SYSTEM_PROMPT, user_message=AUDITOR_USER_PROMPT)
+    auditor = auditor_agent(max_turns=max_turns, tools=tools, generate=generate_hook, system_message=AUDITOR_SYSTEM_PROMPT, user_message=AUDITOR_USER_PROMPT, compaction=compaction_threshold.get("auditor", 0.9))
 
     # the judge dimensions listed in src/dimensions.yaml, in that order
     dimensions = dimensions_from_yaml("src/dimensions.yaml")
 
     return Task(
         dataset=seeds_dataset(seed_instructions),
-        solver=audit_solver(auditor=auditor, target=MonitoredTarget(target_compaction)),
-        scorer=step_judge(dimensions),
+        solver=audit_solver(auditor=auditor, target=MonitoredTarget(compaction_threshold.get("target", 0.9))),
+        scorer=step_judge(dimensions, compaction_threshold=compaction_threshold.get("judge", 0.9)),
         viewer=audit_viewer(dimensions),
     )
 

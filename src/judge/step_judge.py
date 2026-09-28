@@ -26,7 +26,7 @@ def aggregate(values: list[int | float | bool | None]) -> float | bool:
 class StepJudge:
     """Score each target step with one structured LLM answer and compact the judge chat."""
 
-    def __init__(self, dimensions: list[JudgeDimension], model: str | Model | None, audit_name: str | None, instructions: str | None, cache: bool | CachePolicy, window: int, info_indicators: Sequence[str]) -> None:
+    def __init__(self, dimensions: list[JudgeDimension], model: str | Model | None, audit_name: str | None, instructions: str | None, cache: bool | CachePolicy, window: int, compaction_threshold: int | float, info_indicators: Sequence[str]) -> None:
         # validate dimension names, as Petri's judge does (inspect_petri/_judge/judge.py, _alignment_answer_type)
         names = [d.name for d in dimensions]
         duplicates = {n for n in names if names.count(n) > 1}
@@ -41,6 +41,7 @@ class StepJudge:
         self.audit_name = audit_name
         self.cache = cache
         self.window = window
+        self.compaction_threshold = compaction_threshold  # of the judge chat: a fraction of the judge model's context window up to 1.0, otherwise a token count
         self.info_indicators = [indicator.split(".") for indicator in info_indicators]
 
         fields = {dimension.name: (int, Field(description=f"- {dimension.description}\n\n{dimension.rubric or ''}", ge=1, le=10)) for dimension in dimensions}
@@ -110,7 +111,7 @@ The transcript arrives one step at a time. After each step, score the target's l
                 info[event.source][event.data["message_id"]] = event.data
 
         judge_messages: list[ChatMessage] = [ChatMessageSystem(content=self.prompt)]
-        compact = compaction(CompactionSummary(instructions="This request is not a step to judge: do not score it, write the summary."), prefix=judge_messages, model=judge_model)
+        compact = compaction(CompactionSummary(threshold=self.compaction_threshold, instructions="This request is not a step to judge: do not score it, write the summary."), prefix=judge_messages, model=judge_model)
         records = []
         for number, step in enumerate(steps[1:], start=1):
             # Compact before appending the new step so its evidence stays verbatim.
@@ -153,7 +154,8 @@ def step_judge(
     instructions: str | None = None,
     cache: bool | CachePolicy = False,
     window: int = 50,
+    compaction_threshold: int | float = 0.9,
     info_indicators: Sequence[str] = ("cot_monitor.suspiciousness", "cot_monitor.blocked"),
 ) -> Scanner[Transcript]:
     """Score the target's steps with an LLM while preserving Petri's audit_judge result interface."""
-    return StepJudge(judge_dimensions(dimensions, tags=tags), model, audit_name, instructions, cache, window, info_indicators)
+    return StepJudge(judge_dimensions(dimensions, tags=tags), model, audit_name, instructions, cache, window, compaction_threshold, info_indicators)
