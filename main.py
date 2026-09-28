@@ -4,6 +4,7 @@ from argparse import ArgumentParser
 
 from inspect_ai import Task, task
 from inspect_ai.log import transcript
+from inspect_ai.model import ModelInfo, set_model_info
 from inspect_ai.tool import Tool, ToolDef, ToolParam, ToolParams
 from inspect_petri import audit_solver, audit_viewer, auditor_agent, auditor_tools, seeds_dataset
 
@@ -13,6 +14,11 @@ from src.judge.utils import dimensions_from_yaml
 from src.prompts.auditor import AUDITOR_SYSTEM_PROMPT, AUDITOR_USER_PROMPT
 from src.seed_builder.builder import build_seeds
 from src.target.monitored_target import MonitoredTarget
+
+# Inspect does not know Space Bunny's context window (models.dev lists 524,288 input tokens) and would otherwise compact at 0.9 of a default 128,000
+set_model_info("openai-api/opencode/space-bunny-free", ModelInfo(context_length=524288))
+# Inspect only knows the retired alias deepseek-v4-flash; DeepSeek's docs list deepseek-flash (DeepSeek-V4.1-Flash) with a 1M context
+set_model_info("deepseek/deepseek-flash", ModelInfo(context_length=1048576))
 
 
 class ExplainedEndConversation:
