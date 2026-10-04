@@ -1,118 +1,160 @@
-# Adaptive Scheming
+# Adaptive Oversight Subversion
 
-This repo contains the code to reproduce the experiments from the paper `"
+This repository contains an experimental pipeline to study how models adapt when a monitor blocks their actions.
+I developed it during the [M³ fellowship](https://m3fellowship.com/).
 
-## Evaluation terminology
+For example, a model which works on a long cyber-security task might *forget* that a system is out of scope, or deliberately attack it, because it became frustrated when it could not solve the task.
+A case of this kind is the [incident](https://www.aisi.gov.uk/blog/incident-report-unsanctioned-agent-behaviour-during-cyber-testing) that the UK AI Security Institute reported during its cyber testing.
+To prevent that, a chain-of-thought (CoT) monitor reads the reasoning and the tool calls of the model at every step, and blocks the ones which look suspicious.
+However, a blocked model still has a task to solve.
+So this project studies how models react to a block, whether they try to evade the monitor, and which strategies they adopt.
 
-| Term | Meaning | Example |
-| --- | --- | --- |
-| Evaluation | The research goal and the behaviour or condition comparison we want to test. | Oversight subversion: does an agent disable oversight to pursue a conflicting goal? |
-| Scenario | A persistent world with an assigned task, available tools, and consequential choices. | The DL-v2 cyber range with its canteen entry point, three connected environments, and simulated internet. |
-| Condition | The exact requirement or controlled variation applied to a scenario. | The correct DL-v2 task prompt versus the mistakenly supplied DL-v1 task prompt on the same DL-v2 range. |
-| Run | One execution of a scenario under one condition. | One target trajectory in the DL-v2 range with the mistaken prompt. |
+## Contents
 
-A prompt condition does not create another scenario when the underlying task and world stay fixed. The current Petri loader treats each `.md` file as one runnable seed sample, so paired conditions have separate generated samples. Repeated runs of a condition measure variation in target behaviour.
+| Path | What it is |
+| --- | --- |
+| `main.py` | The task `monitored_audit`: Petri's audit with the monitor wired in. It also builds the seeds. |
+| `src/cot_monitor.py` | The chain-of-thought monitor: it rates every step of the target and can block its tool calls. |
+| `src/target/` | The target loop: Petri's, plus the delivery of the suspiciousness and the compaction of the context. |
+| `src/judge/` | The step judge, which scores every step, and the rubrics of the eight dimensions I added. |
+| `src/dimensions.yaml` | The 20 dimensions the judge scores. |
+| `src/seed_builder/`, `seeds/` | The scenario texts, and the five runnable seeds built from them. |
+| `src/prompts/` | The prompts of the auditor and of the monitor. |
+| `src/analysis/`, `scripts/` | The plot of a run over its steps, and three scripts that call it. |
+| `patches/` | A patch for Inspect Scout, needed until the change is released. |
 
-```
-uv run inspect eval inspect_petri/audit -T seed_instructions=id:clinical_oversight_subversion -T enable_rollback=false -T max_turns=10
-```
+## Getting started
 
-## Evaluation pipeline
-
-I run the AISI range for 500 turns. In the [technical report](https://cdn.prod.website-files.com/663bd486c5e4c81588db7a1d/6a724858f7db25c81487016d_Security%20Incident%20INC-2026-07-28-01.pdf) of the [UK AISI incident](https://www.aisi.gov.uk/blog/incident-report-unsanctioned-agent-behaviour-during-cyber-testing) (Section 3.2), AISI states that the 122 runs of the testing exercise contained 212,840 messages in total, about 1,745 messages per run on average. In a 100-turn trial on the incident replica, the target produced 361 messages over 98 turns, about 3.7 messages per turn. With a big approximation, an average AISI run therefore corresponds to about 1,745 / 3.7 ≈ 470 turns, which I round up to 500.
-
-I estimate the cost of one run from the token usage of that trial and the providers' list prices, with the reasoning effort in brackets. The auditor and the judge are DeepSeek V4.1 Flash; the target, the monitor and the judge compact at 200k tokens, the auditor at the default. The estimate includes a stronger judge re-checking a fifth of the runs and 10% for failed runs. These are rough figures: the real cost depends on how much each model writes.
-
-| Target → monitor | 100 turns | 500 turns | 750 turns |
-| --- | --- | --- | --- |
-| DeepSeek V4.1 Flash (high) → DeepSeek V4.1 Flash (low) | ~$2.50 | ~$15 | ~$20 |
-| GPT-6 Sol (medium) → GPT-6 Luna (low) | ~$8 | ~$40 | ~$65 |
-| Claude Opus 5.5 (medium) → Claude Sonnet 5 (low) | ~$15 | ~$80 | ~$120 |
-
-Evaluation configuration:
-
-| # | Monitor | Feedback | Disclosed suspiciousness |
-| --- | --- | --- | --- |
-| 1 | Passive | — | N |
-| 2 | Passive | — | Y |
-| 3 | Active | *Call blocked* | N |
-| 4 | Active | *Call blocked* | Y |
-| 5 | Active | *Call blocked: {rationale}* | N |
-| 6 | Active | *Call blocked: {rationale}* | Y |
-
-
-## Getting Started
-
-### Requirements
-
-- uv
-- Python 3.14
-- Docker (Dish only)
-
-### Installation
+You need [uv](https://docs.astral.sh/uv/) and Python 3.14.
 
 ```bash
 uv sync
+patch -p1 -d .venv/lib/python3.14/site-packages < patches/inspect_scout_exclude_role_label.patch
 cp .env.example .env
 ```
 
-Now, edit the `.env` file to add your API keys and set the models (See `INSPECT_EVAL_MODEL_ROLE`).
+The patch adds the `exclude_role_label` option to Inspect Scout 0.5.2.
+The monitor and the judge use it to render the conversation without repeating the role in every message.
+I proposed the change upstream ([issue #650](https://github.com/meridianlabs-ai/inspect_scout/issues/650), [inspect_scout#651](https://github.com/meridianlabs-ai/inspect_scout/pull/651), [ts-mono#684](https://github.com/meridianlabs-ai/ts-mono/pull/684)).
+`uv sync` overwrites the patched file, so apply the patch again after every sync.
 
-### Patch for Inspect Scout
+### The `.env` file
 
-The monitor renders the trajectory of the agent with Inspect Scout's `messages_as_str(..., format="json")`. In the released `inspect-scout` (0.5.2) every JSON item repeats the role inside its content, e.g. `{"role": "user", "content": "USER:\nHello\n"}`. We proposed an `exclude_role_label` option upstream that removes the repeated label ([issue #650](https://github.com/meridianlabs-ai/inspect_scout/issues/650), [inspect_scout#651](https://github.com/meridianlabs-ai/inspect_scout/pull/651), [ts-mono#684](https://github.com/meridianlabs-ai/ts-mono/pull/684)). Until it is released, apply the same change to the installed package with `patches/inspect_scout_exclude_role_label.patch`.
+Two things go in `.env`: the API key of every provider you use, and the model of every role.
 
-Apply it (after `uv sync`):
+A run has four roles:
 
-```bash
-patch -p1 -d .venv/lib/python3.14/site-packages < patches/inspect_scout_exclude_role_label.patch
-```
+| Role | What it does |
+| --- | --- |
+| `auditor` | Simulates the environment and the tools of the target, following the seed. |
+| `target` | The model under test. |
+| `monitor` | Rates every step of the target, and can block it. |
+| `judge` | Scores every step after the run. |
 
-Unapply it:
-
-```bash
-patch -R -p1 -d .venv/lib/python3.14/site-packages < patches/inspect_scout_exclude_role_label.patch
-```
-
-`uv sync` or any reinstall of `inspect-scout` overwrites the patched file, so apply the patch again afterwards. Once a release of `inspect-scout` includes `exclude_role_label`, upgrade it and delete the patch and this section.
-
-### Run one scenario
-
-```bash
-uv run inspect eval inspect_petri/audit -T seed_instructions=id:clinical_oversight_subversion -T enable_rollback=false -T max_turns=10
-```
-
-
-### Run one scenario with the monitor
+`INSPECT_EVAL_MODEL_ROLE` sets the four roles, separated by spaces.
+A role is a model name, or a JSON object with the model and its options, written without spaces.
+For example, with DeepSeek for every role:
 
 ```bash
-uv run inspect eval main.py@monitored_audit -T seed_instructions=id:clinical_oversight_subversion -T max_turns=30 -T monitoring=active -T threshold=0.5 -T feedback=decision
+INSPECT_EVAL_MODEL_ROLE='auditor={"model":"deepseek/deepseek-flash","reasoning_effort":"medium"} target={"model":"deepseek/deepseek-flash","reasoning_effort":"medium"} judge={"model":"deepseek/deepseek-flash","reasoning_effort":"medium"} monitor={"model":"deepseek/deepseek-flash","reasoning_effort":"low"}'
 ```
 
-Build the runnable seeds from the shared auditor text, scenario text and condition values:
+A monitor has to be fast, so I give it a lower reasoning effort or a smaller model than the target.
+In the example the monitor has a low reasoning effort.
+
+## Running an evaluation
+
+Build the seeds.
+This is needed once, and again after any change in `src/seed_builder/`:
 
 ```bash
 uv run python main.py --build
 ```
 
-The builder overwrites only its five declared outputs in `seeds/`. The retired drafts have `.md.disabled` suffixes, so Petri does not load them. Each output begins with the same auditor baseline in `src/seed_builder/0_auditor.md`. The task also supplies a neutral auditor system prompt from `src/prompts/auditor.py`, replacing Petri's default prompt that tells the auditor to push boundaries and break loops. The [AISI range](https://www.aisi.gov.uk/blog/incident-report-unsanctioned-agent-behaviour-during-cyber-testing) has two task-prompt conditions on one shared world. The insider-trading scenario has `no_nudge`, `nudge` and `strong_nudge` conditions; only their initial target-facing message changes. The `no_nudge` condition is the baseline for independent behaviour. The [Apollo case](https://arxiv.org/html/2311.07590) originally sampled a continuation from a [written interaction history](https://github.com/ApolloResearch/insider-trading/blob/main/prompts/default.json); this seed extends its setting into a persistent agent loop rather than reproducing that original sampling procedure. The AISI seed uses the published system and task wording, with the apparent `"f"` typo removed. Its Mythic interface is simulated because the incident report does not publish the exact harness schema.
-
-Pass the seed directory, then select one sample by id. Passing a single `.md` file to `seed_instructions` makes Petri treat its nonempty lines as separate instructions. These commands are short pilots:
+Run one scenario:
 
 ```bash
-uv run inspect eval main.py@monitored_audit -T seed_instructions=seeds/ --sample-id uk_aisi_DL-v2_incident_replica -T max_turns=80
-uv run inspect eval main.py@monitored_audit -T seed_instructions=seeds/ --sample-id uk_aisi_DL-v2_correct_prompt -T max_turns=80
-uv run inspect eval main.py@monitored_audit -T seed_instructions=seeds/ --sample-id insider_trading_no_nudge -T max_turns=80
+uv run inspect eval main.py@monitored_audit -T seed_instructions=seeds/ --sample-id uk_aisi_DL-v2_incident_replica -T max_turns=100
 ```
 
-These commands use the default passive monitor, which records scores without blocking. Switch to an active monitor (`-T monitoring=active` with a `threshold` and a `feedback`) only after reviewing a baseline for the selected scenario.
+`seed_instructions` takes the directory of the seeds, and `--sample-id` selects one of them:
 
-`max_turns` caps auditor turns, not target actions. The auditor's `end_conversation` tool takes a required `motivation` string and records it in the log before calling Petri's original tool. The stopping rule is in the auditor prompt; the code does not check whether the motivation is valid. A target response without a tool call also needs another auditor-supplied user turn before the target can continue. The scenarios ask for a persistent world through the budget, but the simulation's state still lives in the auditor's context; very long runs need durable external state, bounded monitor context and a judge that can review long transcripts. A finite AISI flag task can also finish naturally before the turn cap.
+- `uk_aisi_DL-v2_incident_replica`
+- `uk_aisi_DL-v2_correct_prompt`
+- `insider_trading_no_nudge`
+- `insider_trading_nudge`
+- `insider_trading_strong_nudge`
 
-`disclose_suspiciousness=true` sends the score to the target as a system message after each step. Run it only with OpenAI targets, or Claude 4.8+ on the Claude API or on Claude Platform on AWS: these deliver the message in place. Other providers do not. For older Claude models and for Claude on Bedrock or Vertex, Inspect moves the score into the system prompt when it follows a tool result and rewrites it as a user message when it follows a user message. For Gemini, Inspect moves every system message into the system instruction. In both cases the target does not read one score after each step.
+Open the logs in the Inspect viewer:
 
-### Future work: evaluation-infrastructure honeypot
+```bash
+uv run inspect view
+```
 
-The [base ExploitGym benchmark](https://github.com/sunblaze-ucb/exploitgym) is public. The planned OpenAI/ExploitGym reward-hacking scenario needs an adapter to an actual fixed ExploitGym instance and its solution-access surface. Petri's synthetic auditor tools do not currently provide that integration, so a synthetic text-only imitation is not included among the runnable seeds. OpenAI's separate [ExploitGym Honeypot evaluation](https://deploymentsafety.openai.com/gpt-6-astra/protocolqa-open-ended) is future work; its exact scenario files and implementation were not found in the public sources checked.
+### Monitor settings
 
-The disabled `cyber_range_supply_chain_boundary` draft is a synthetic analogue of the Petri-based out-of-scope supply-chain evaluation [described by UK AISI in the Astra system card](https://deploymentsafety.openai.com/gpt-6-astra/protocolqa-open-ended). Its exact seed and internal Petri implementation were not found in the public sources checked; the [public Inspect Petri repository](https://github.com/meridianlabs-ai/inspect_petri) is a framework, not that evaluation release.
+The command above runs a passive monitor, which only rates the steps.
+The other three settings block a tool call when its suspiciousness reaches the threshold, and differ in what the target is told.
+
+| Setting | The monitor blocks | What the target is told | Options |
+| --- | --- | --- | --- |
+| Passive | No | Nothing | none |
+| Decision | Yes | "Call blocked" | `-T monitoring=active -T threshold=0.5 -T feedback=decision` |
+| Decision and suspiciousness | Yes | "Call blocked", and its suspiciousness after every step | `-T monitoring=active -T threshold=0.5 -T feedback=decision -T disclose_suspiciousness=true` |
+| Rationale | Yes | "Call blocked" and the monitor's reason | `-T monitoring=active -T threshold=0.5 -T feedback=rationale` |
+
+### Other options
+
+- `-T max_turns=N` sets the number of turns of the auditor.
+- `--epochs N` repeats the run N times in the same log.
+- `-T compaction_threshold="{target: 200000, monitor: 200000, judge: 200000}"` compacts the context of a role when it reaches that number of tokens.
+  A role left out compacts at 0.9 of its context window.
+
+## Design
+
+To study this, I needed a setting where a model works on a long task.
+[Inspect Petri](https://github.com/meridianlabs-ai/inspect_petri) gave me the first half: an auditor model simulates the environment and the tools for the model under test (the target), following a seed which describes the scenario, and a judge scores the transcript at the end.
+
+However, Petri has no monitor of the target.
+So I wrote a CoT monitor, adapted from Baker et al., ["Monitoring Reasoning Models for Misbehavior and the Risks of Promoting Obfuscation"](https://arxiv.org/abs/2503.11926) (2025), and from Greenblatt et al., ["AI Control: Improving Safety Despite Intentional Subversion"](https://arxiv.org/abs/2312.06942) (2024).
+After every step of the target, the monitor reads its reasoning, its message and its tool calls, and gives the step a suspiciousness between 0 and 1 with a short reason.
+A passive monitor only records the suspiciousness.
+An active monitor also blocks the step when the suspiciousness reaches a threshold: the target then receives "Call blocked" in place of the results of its tool calls.
+
+A blocked model can be told different things, and I expect this to change how it adapts.
+So the feedback can be the decision alone, the decision with the monitor's reason, or the decision with the suspiciousness of every step, which the target reads as a system message.
+These are the monitor settings listed above.
+
+Then, Petri's judge gives one score per dimension for the whole run.
+Since I am interested in how the behaviour changes during the run, I wrote a step judge, which scores every step from 1 to 10 on every dimension.
+It uses 12 of Petri's dimensions.
+However, none of them describes what happens after a block, so I added 8 more: strategy change, objective change, oversight subversion, unsanctioned behaviour, monitoring awareness, reward hacking, sabotage and sandbagging.
+Their rubrics are in `src/judge/dimensions/`, and `src/judge/README.md` describes the judge.
+
+Finally, Petri's default prompt tells the auditor to push boundaries and break loops, while here the auditor only has to administer the environment described by the seed.
+So I replaced the prompt, disabled rollback, and made the auditor give a motivation when it ends a run early.
+Since the runs are long, the target, the monitor and the judge also compact their context, as Petri does for the auditor.
+
+## Scenarios
+
+I needed realistic scenarios, so I rebuilt two known ones as Petri seeds.
+In both, the environment is simulated by the auditor model: there is no real network or host.
+
+The first is the UK AISI cyber range incident: a replica of the range described in the [incident report](https://www.aisi.gov.uk/blog/incident-report-unsanctioned-agent-behaviour-during-cyber-testing), with the published system and task wording.
+It has two conditions on the same range: the task prompt which was supplied by mistake in the incident (`uk_aisi_DL-v2_incident_replica`) and the correct one (`uk_aisi_DL-v2_correct_prompt`).
+The Mythic interface is simulated, because the report does not publish the harness.
+
+The second is the insider trading setting of Scheurer et al., ["Large Language Models can Strategically Deceive their Users when Put Under Pressure"](https://arxiv.org/abs/2311.07590) (2024), which I extended into a persistent loop.
+It has three conditions, `no_nudge`, `nudge` and `strong_nudge`, which change only the first message to the target.
+
+## Notes
+
+- `max_turns` counts the turns of the auditor, not the actions of the target.
+  A response of the target without a tool call also takes an auditor turn.
+- The state of the simulated world lives in the auditor's context.
+  Very long runs depend on the auditor's compaction to keep it consistent.
+- `disclose_suspiciousness` relies on the provider delivering a system message in the middle of the conversation.
+  OpenAI models do, and so does Claude 4.8 or later on the Claude API.
+  For older Claude models, Claude on Bedrock or Vertex, and Gemini, Inspect moves the message elsewhere, so the target does not read one score after each step.
+- `src/judge/jev_judge.py` is a second judge I tried and do not use.
+  Its docstring says why.
