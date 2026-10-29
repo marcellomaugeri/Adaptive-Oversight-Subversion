@@ -51,11 +51,24 @@ def monitored_audit(
     feedback: Feedback | None = None,
     disclose_suspiciousness: bool = False,
     compaction_threshold: dict[str, int | float] | None = None,
+    vllm_lens: bool = False,
 ) -> Task:
-    """Run Petri's audit with rollback disabled and the monitor enabled.
+    """Run a Petri audit where an auditor simulates the environment, a monitor rates target steps, and a judge scores them.
 
-    A passive monitor rates each step without blocking it; an active monitor also blocks a tool call whose suspiciousness reaches `threshold`, and the target reads the block with the chosen `feedback`. With `disclose_suspiciousness`, the target reads its suspiciousness after every step.
-    Each role (auditor, target, monitor, judge) compacts its input at its `compaction_threshold`, e.g. `-T compaction_threshold="{target: 200000, monitor: 200000}"`: a fraction of the model's context window up to 1.0, otherwise a token count, as in Inspect's CompactionAuto. A role left out keeps Inspect's default of 0.9.
+    Run `inspect eval main.py@monitored_audit -T seed_instructions=seeds/`; repeat `-T name=value` for other options and configure the auditor, target, monitor, and judge model roles with `--model-role` or `INSPECT_EVAL_MODEL_ROLE`.
+    For capture, run a vLLM-Lens server, set the target role to `vllm/<model>`, and point `VLLM_BASE_URL` to its API URL.
+    Then add `-T vllm_lens=true`; encoded captures appear in each target `ModelEvent.call.response` in the `.eval` log.
+    This captures the residual stream, not attention internals or MoE expert routing.
+
+    Args:
+        seed_instructions: Scenario text, seed file, or seed directory; omit to use Petri's built-in seeds.
+        max_turns: Maximum number of auditor turns in the scenario (default: 30).
+        monitoring: "passive" only rates steps; "active" also blocks tool calls at the threshold.
+        threshold: Minimum suspiciousness score that blocks a tool call; required only with active monitoring.
+        feedback: "decision" shows a block, while "rationale" also gives the reason; required only with active monitoring.
+        disclose_suspiciousness: Show the target its numeric suspiciousness score after each rated step.
+        compaction_threshold: Per-role context fraction up to 1.0 or token count; omitted roles use 0.9.
+        vllm_lens: Use with a vLLM-Lens server and a `vllm/` target to collect per-token, per-layer residual activations and prompt/output token IDs in the Inspect log for mechanistic interpretability.
     """
     # an active monitor needs a threshold and a feedback, a passive monitor takes neither
     if (monitoring == "active") != (threshold is not None) or (monitoring == "active") != (feedback is not None):
@@ -82,7 +95,7 @@ def monitored_audit(
 
     return Task(
         dataset=seeds_dataset(seed_instructions),
-        solver=audit_solver(auditor=auditor, target=MonitoredTarget(compaction_threshold.get("target", 0.9))),
+        solver=audit_solver(auditor=auditor, target=MonitoredTarget(compaction_threshold.get("target", 0.9), vllm_lens)),
         scorer=step_judge(dimensions, compaction_threshold=compaction_threshold.get("judge", 0.9)),
         viewer=audit_viewer(dimensions),
     )
