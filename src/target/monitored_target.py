@@ -14,11 +14,12 @@ class MonitoredTarget:
 
     async def __call__(self, state: AgentState, context: TargetContext) -> AgentState:
         target_model = get_model(role="target")
-        if self.vllm_lens and not str(target_model).startswith("vllm/"):
-            raise ValueError("vllm_lens requires a vllm target provider")
-        extra_body = target_model.config.extra_body or {}
-        vllm_xargs = {**(extra_body.get("vllm_xargs") or {}), "output_residual_stream": True}
-        generate_kwargs = {"config": GenerateConfig(extra_body={**extra_body, "vllm_xargs": vllm_xargs, "return_token_ids": True})} if self.vllm_lens else {}
+        generate_kwargs = {}
+        if self.vllm_lens:
+            if not str(target_model).startswith("vllm/"):
+                raise ValueError("vllm_lens requires a vllm target provider")
+            extra_body = target_model.config.extra_body or {}
+            generate_kwargs["config"] = GenerateConfig(extra_body={**extra_body, "vllm_xargs": {**(extra_body.get("vllm_xargs") or {}), "output_residual_stream": True}, "return_token_ids": True})
         generate = context.replayable(target_model.generate, surface_errors=True)
         try:
             # the system and user message written by the auditor

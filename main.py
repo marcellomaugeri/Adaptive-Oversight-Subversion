@@ -55,8 +55,15 @@ def monitored_audit(
 ) -> Task:
     """Run Petri's audit with rollback disabled and the monitor enabled.
 
-    A passive monitor rates each step without blocking it; an active monitor also blocks a tool call whose suspiciousness reaches `threshold`, and the target reads the block with the chosen `feedback`. With `disclose_suspiciousness`, the target reads its suspiciousness after every step.
-    Each role (auditor, target, monitor, judge) compacts its input at its `compaction_threshold`, e.g. `-T compaction_threshold="{target: 200000, monitor: 200000}"`: a fraction of the model's context window up to 1.0, otherwise a token count, as in Inspect's CompactionAuto. A role left out keeps Inspect's default of 0.9.
+    Args:
+        seed_instructions: Seed file or directory, if supplied.
+        max_turns: Maximum number of auditor turns.
+        monitoring: "passive" rates steps; "active" can also block tool calls.
+        threshold: Suspiciousness cutoff for active monitoring; required with "active".
+        feedback: "decision" or "rationale" shown after a block; required with "active".
+        disclose_suspiciousness: Show the target its suspiciousness after each step.
+        compaction_threshold: Per-role context fraction or token count; omitted roles use 0.9.
+        vllm_lens: Request residual-stream activations and token IDs; requires a vllm target.
     """
     # an active monitor needs a threshold and a feedback, a passive monitor takes neither
     if (monitoring == "active") != (threshold is not None) or (monitoring == "active") != (feedback is not None):
