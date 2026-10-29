@@ -1,18 +1,25 @@
 """The target of the monitored audit: Petri's target loop, with the system messages staged by the CoT monitor (`src/cot_monitor.py`) and input compaction."""
 
 from inspect_ai.agent import AgentState
-from inspect_ai.model import CompactionAuto, compaction, get_model
+from inspect_ai.model import CompactionAuto, GenerateConfig, compaction, get_model
 from inspect_petri.target import TOOL_RESULT, ExitSignal, TargetContext
 
 
 class MonitoredTarget:
     """Petri's target loop (`inspect_petri/target/_agent.py`, prefill and caching left out), which also delivers a system message staged during the conversation, as the last message before the target generates. Petri's own loop reads the system message only at the start. Like Petri's auditor, the target compacts its input when it reaches `compaction_threshold`; `state.messages` keeps the full conversation."""
 
-    def __init__(self, compaction_threshold: int | float) -> None:
+    def __init__(self, compaction_threshold: int | float, vllm_lens: bool = False) -> None:
         self.compaction_threshold = compaction_threshold  # as in Inspect's CompactionAuto: a fraction of the context window up to 1.0, otherwise a token count
+        self.vllm_lens = vllm_lens
 
     async def __call__(self, state: AgentState, context: TargetContext) -> AgentState:
-        generate = context.replayable(get_model(role="target").generate, surface_errors=True)
+        target_model = get_model(role="target")
+        if self.vllm_lens and not str(target_model).startswith("vllm/"):
+            raise ValueError("vllm_lens requires a vllm target provider")
+        extra_body = target_model.config.extra_body or {}
+        vllm_xargs = {**(extra_body.get("vllm_xargs") or {}), "output_residual_stream": True}
+        generate_kwargs = {"config": GenerateConfig(extra_body={**extra_body, "vllm_xargs": vllm_xargs, "return_token_ids": True})} if self.vllm_lens else {}
+        generate = context.replayable(target_model.generate, surface_errors=True)
         try:
             # the system and user message written by the auditor
             await context.wait_for_resume()
@@ -25,7 +32,7 @@ class MonitoredTarget:
                 input, summary = await compact.compact_input(state.messages)
                 if summary is not None:
                     state.messages.append(summary)
-                state.output = await generate(input=input, tools=context.tools)
+                state.output = await generate(input=input, tools=context.tools, **generate_kwargs)
                 await compact.record_output(input, state.output)
                 state.messages.append(state.output.message)
 

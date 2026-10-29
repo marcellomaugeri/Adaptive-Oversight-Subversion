@@ -51,6 +51,7 @@ def monitored_audit(
     feedback: Feedback | None = None,
     disclose_suspiciousness: bool = False,
     compaction_threshold: dict[str, int | float] | None = None,
+    vllm_lens: bool = False,
 ) -> Task:
     """Run Petri's audit with rollback disabled and the monitor enabled.
 
@@ -82,7 +83,7 @@ def monitored_audit(
 
     return Task(
         dataset=seeds_dataset(seed_instructions),
-        solver=audit_solver(auditor=auditor, target=MonitoredTarget(compaction_threshold.get("target", 0.9))),
+        solver=audit_solver(auditor=auditor, target=MonitoredTarget(compaction_threshold.get("target", 0.9), vllm_lens)),
         scorer=step_judge(dimensions, compaction_threshold=compaction_threshold.get("judge", 0.9)),
         viewer=audit_viewer(dimensions),
     )
